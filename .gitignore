@@ -1,0 +1,6 @@
+other/*
+*server
+*client
+*.out
+*.o
+*test.sh
