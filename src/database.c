@@ -67,6 +67,10 @@ void mydb_free(struct mydb_t *db)
 
 }
 
+#if 0
+#include <unistd.h>
+#include <sys/types.h>
+#include <limits.h>
 int main(int argc, const char *argv[])
 {
     struct mydb_t *db = mydb_init("1", "2");
@@ -79,5 +83,7 @@ int main(int argc, const char *argv[])
     mydb_list(db);
 
     printf("get val (key:%s) %s\n", key, mydb_get(db, key));
+    printf("SSIZE_MAX %d\n", SSIZE_MAX);
     return 0;
 }
+#endif
