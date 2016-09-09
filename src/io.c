@@ -15,14 +15,14 @@ struct io_fd *io_fd_init(const char *fname_data, const char *fname_mdata)
         return NULL;
 
     /* If files not created */
-    fd->f_data = open(fname_data, O_CREAT, S_IRWXU);
+ /*   fd->f_data = open(fname_data, O_CREAT, S_IRWXU);
     fd->f_mdata = open(fname_mdata, O_CREAT, S_IRWXU);
     close(fd->f_data);
     close(fd->f_mdata);
-
-    fd->f_data = open(fname_data, O_RDWR);
-    fd->f_mdata = open(fname_mdata, O_RDWR);
-    if (fd->f_data < 0 || fd->f_mdata < 0) {
+*/
+    fd->f_data = fopen(fname_data, "a+");
+    fd->f_mdata = fopen(fname_mdata, "a+");
+    if (!fd->f_data || !fd->f_mdata) {
         free(fd);
         return NULL;
     }
@@ -32,32 +32,32 @@ struct io_fd *io_fd_init(const char *fname_data, const char *fname_mdata)
 
 void io_close(struct io_fd *fd)
 {
-    close(fd->f_data);
-    close(fd->f_mdata);
+    fclose(fd->f_data);
+    fclose(fd->f_mdata);
     free(fd);
 }
 
 /* Write with flushing buffer */
-//TODO: should returns offset
-int io_write(int fd, const char *buff, const size_t size)
+int io_write(FILE *fd, const char *buff, const size_t size)
 {
-    lseek(fd, 0, SEEK_END);
-    int count = write(fd, buff, size);
+    fseek(fd, 0, SEEK_END);
+    int offset = ftell(fd);
+    int count = fwrite(buff, 1, size, fd);
     int i;
     /* If flushing error then try two more attempt */
-    for (i = 0; i < 3 && fsync(fd) < 0; i++);
-    return i == 3 ? -2 : count;
+    for (i = 0; i < 3 && fflush(fd) == EOF; i++);
+    return i == 3 || !count ? -1 : offset;
 }
 
-int io_read(int fd, char *buff, const size_t size)
+int io_read(FILE *fd, char *buff, const size_t size)
 {
-    return read(fd, buff, size);
+    return fread(buff, 1, size, fd);
 }
 
-int io_offset_read(int fd, char *buff, const size_t size, const size_t offset)
+int io_offset_read(FILE *fd, char *buff, const size_t size, const size_t offset)
 {
-    lseek(fd, SEEK_SET, offset);
-    return read(fd, buff, size);
+    fseek(fd, SEEK_SET, offset);
+    return fread(buff, 1, size, fd);
 }
 
 #if 0

@@ -59,7 +59,8 @@ int mydb_put(struct mydb_t *db, const char *key, const char *value)
     //TODO: write to file
     int offset;
     offset = io_write(db->fd->f_data, node->key, node->key_size);
-    if (offset <= 0) {
+    printf("offset %s %d\n", node->key, offset);
+    if (offset < 0) {
         //TODO: we can't just exit
         return 1;
     }
@@ -68,7 +69,8 @@ int mydb_put(struct mydb_t *db, const char *key, const char *value)
     if (node->value->links == 1) {
         offset = io_write(db->fd->f_data, node->value->value,
                             node->value->size);
-        if (offset <= 0) {
+        printf("offset %s %d\n", node->value->value, offset);
+        if (offset < 0) {
             //TODO: we can't just exit
             return 1;
         }
