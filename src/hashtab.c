@@ -30,14 +30,16 @@ struct hashtab_t *hashtab_init(size_t size)
 
     tab->tab_size = size;
     tab->count = 0;
+    tab->del_count = 0;
     return tab;
 }
 
-/* Add new key or change old equal key */
-static struct hashtab_node *add_node(struct hashtab_t *tab, const char *key, struct hashtab_inode *inode)
+static struct hashtab_node *get_node(struct hashtab_t *tab, const char *key,
+        size_t key_len, size_t *i)
 {
-    size_t key_len = strlen(key) + 1;
+
     size_t index = (size_t) my_hash(key, key_len) % tab->tab_size;
+    *i = index;
 
     /* Search node with equal key */
     struct hashtab_node *node = tab->nodes[index];
@@ -47,6 +49,18 @@ static struct hashtab_node *add_node(struct hashtab_t *tab, const char *key, str
         }
         node = node->next;
     }
+
+    return node;
+}
+
+/* Add new key or change old equal key */
+static struct hashtab_node *add_node(struct hashtab_t *tab,
+        const char *key, struct hashtab_inode *inode)
+{
+    size_t key_len = strlen(key) + 1;
+    size_t index;
+    struct hashtab_node *node = get_node(tab, key, key_len, &index);
+
     /* Modify or create new node */
     if (!node) {
         if ((node = malloc(sizeof(struct hashtab_node))) == NULL ) {
@@ -65,6 +79,8 @@ static struct hashtab_node *add_node(struct hashtab_t *tab, const char *key, str
             //delete_value(inode);
         }
         node->value = inode;
+        tab->del_count -= node->del ? 1 : 0;
+        node->del = 0;
     }
     return node;
 }
@@ -105,9 +121,6 @@ static struct hashtab_inode *add_inode(struct hashtab_t *tab, const char *val)
 
 struct hashtab_node * const hashtab_push(struct hashtab_t *tab, const char *key, const char *val)
 {
-    struct hashtab_node *tmp_node;
-    int i;
-
     struct hashtab_inode *inode = add_inode(tab, val);
     if (!inode) {
         return NULL;
@@ -128,8 +141,10 @@ int hashtab_print_keys(struct hashtab_t *tab)
     for (size_t i = 0; i < tab->tab_size; i++) {
         struct hashtab_node *node = tab->nodes[i];
         while (node) {
-            count++;
-            printf("%ld. \"%s\"\n", count, node->key);
+            if (!node->del) {
+                count++;
+                printf("%ld. \"%s\"\n", count, node->key);
+            }
             node = node->next;
         }
     }
@@ -139,53 +154,138 @@ int hashtab_print_keys(struct hashtab_t *tab)
 char const * const hashtab_get_value(struct hashtab_t *tab, const char* key)
 {
     size_t key_len = strlen(key) + 1;
-    size_t index = (size_t) my_hash(key, key_len) % tab->tab_size;
+    size_t index;
+    struct hashtab_node *node = get_node(tab, key, key_len, &index);
 
-    /* Search node with equal key */
-    struct hashtab_node *node = tab->nodes[index];
-    while (node) {
-        if(!strcmp(node->key, key))
-            break;
-        node = node->next;
-    }
-
-    if (!node)
+    if (!node || node->del)
         return NULL;
 
     return node->value->value;
 }
 
-long int hashtab_get_index(struct hashtab_t*tab, long int val)
+int hashtab_lazy_delete(struct hashtab_t *tab, const char *key)
 {
-/*    long int i;
-    struct hashtab_node *tmp_node;
-    struct hashtab_node **tab = tab->nodes;
+    size_t key_len = strlen(key) + 1;
+    size_t index;
+    struct hashtab_node *node = get_node(tab, key, key_len, &index);
 
-    i = val % tab->size;
-    tmp_node = tab[i];
-    while(tmp_node != NULL) {
-        if (tmp_node->val == val) {
-            return tmp_node->index;
-        }
-        tmp_node = tmp_node->next;
-    }*/
-    return -1;
+    if (!node)
+        return 1;
+
+    if (node->del == 0) {
+        node->del = 1;
+        tab->del_count++;
+        tab->count--;
+    }
+    return 0;
 }
 
-int hashtab_free(struct hashtab_t*tab)
+void hashtab_real_delete(struct hashtab_t *tab)
 {
-/*    long int i;
-    struct hashtab_node *tmp_node;
-    struct hashtab_node **tab = tab->nodes;
+    /* Delete nodes */
+    struct hashtab_node *old_node;
+    struct hashtab_node *node;
+    struct hashtab_node *del_node;
+    int del_flg;
 
-    for (i = 0; i < tab->size; i++) {
-        while(tab[i] != NULL) {
-            tmp_node = tab[i];
-            tab[i] = tab[i]->next;
-            free(tmp_node);
+    for (size_t i = 0; i < tab->tab_size; i++) {
+        old_node = NULL;
+        node = tab->nodes[i];
+        while (node) {
+            /* free each deleted nodes */
+            del_flg = 0;
+            if (node->del) {
+                if (old_node) {
+                    old_node->next = node->next;
+                    del_node = node;
+                    node = old_node;
+                } else {
+                    tab->nodes[i] = node->next;
+                    del_node = node;
+                    node = tab->nodes[i];
+                }
+                del_node->value->links--;
+                free(del_node->key);
+                free(del_node);
+                tab->del_count--;
+                del_flg++;
+            }
+            if (del_flg && node == tab->nodes[i]) {
+                old_node = NULL;
+            } else {
+                old_node = node;
+                node = node->next;
+            }
         }
     }
+
+    /* Delete inodes */
+    struct hashtab_inode *old_inode;
+    struct hashtab_inode *inode;
+    struct hashtab_inode *del_inode;
+
+    for (size_t i = 0; i < tab->tab_size; i++) {
+        old_inode = NULL;
+        inode = tab->inodes[i];
+        while (inode) {
+            /* free each deleted inodes */
+            del_flg = 0;
+            if (inode->links <= 0) {
+                if (old_inode) {
+                    old_inode->next = inode->next;
+                    del_inode = inode;
+                    inode = old_inode;
+                } else {
+                    tab->inodes[i] = inode->next;
+                    del_inode = inode;
+                    inode = tab->inodes[i];
+                }
+                free(del_inode->value);
+                free(del_inode);
+                del_flg++;
+            }
+            if (del_flg && inode == tab->inodes[i]) {
+                old_inode = NULL;
+            } else {
+                old_inode = inode;
+                inode = inode->next;
+            }
+        }
+    }
+}
+
+void hashtab_free(struct hashtab_t *tab)
+{
+    /* free nodes */
+    struct hashtab_node *node;
+    struct hashtab_node *free_node;
+
+    for (size_t i = 0; i < tab->tab_size; i++) {
+        node = tab->nodes[i];
+        while (node) {
+            free_node = node;
+            node = node->next;
+            free(free_node->key);
+            free(free_node);
+        }
+    }
+
+    /* free inodes */
+    struct hashtab_inode *inode;
+    struct hashtab_inode *free_inode;
+
+    for (size_t i = 0; i < tab->tab_size; i++) {
+        inode = tab->inodes[i];
+        while (inode) {
+            free_inode = inode;
+            inode = inode->next;
+            free(free_inode->value);
+            free(free_inode);
+        }
+    }
+
+    /* free tab */
+    free(tab->nodes);
+    free(tab->inodes);
     free(tab);
-    free(tab);*/
-    return 0;
 }

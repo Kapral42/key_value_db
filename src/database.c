@@ -87,6 +87,11 @@ char const * const mydb_get(struct mydb_t *db, const char *key)
 
 int mydb_erase(struct mydb_t *db, const char *key)
 {
+    hashtab_lazy_delete(db->tab, key);
+    if (db->tab->del_count > MAX_DELETED_ELEM) {
+        hashtab_real_delete(db->tab);
+        //TODO: rewrite files
+    }
     return 0;
 }
 
@@ -94,6 +99,8 @@ void mydb_close(struct mydb_t *db)
 {
     //TODO:save mdata and free everything
     
+
+    hashtab_free(db->tab);
 }
 
 #if 1
@@ -108,7 +115,7 @@ int main(int argc, const char *argv[])
         printf("DB not created\n");
         return 1;
     }
-    char *key = "123";
+/*    char *key = "123";
     char *value = "456";
     if (!mydb_put(db, key, value)) {
         printf("PUT SUCCESS\n");
@@ -117,10 +124,25 @@ int main(int argc, const char *argv[])
     char *value1 = "456";
     if (!mydb_put(db, key1, value1)) {
         printf("PUT SUCCESS\n");
+    } */
+    char *Keys[] = {"01", "02", "03", "04",
+                   "05", "06", "07", "08"};
+    char *Values[] = {"o1", "o2", "o3", "o4",
+                     "o5", "o6", "o7", "o8"};
+    for (int i = 0; i < 8; i++) {
+        if (!mydb_put(db, Keys[i], Values[i])) {
+            printf("%d PUT SUCCESS\n", i);
+        }
     }
     mydb_list(db);
+    mydb_erase(db, Keys[1]);
+    mydb_erase(db, Keys[2]);
+    mydb_erase(db, Keys[3]);
+    printf("\n");
+    hashtab_real_delete(db->tab);
+    mydb_list(db);
 
-    printf("get val (key:%s) %s\n", key, mydb_get(db, key));
+  //  printf("get val (key:%s) %s\n", key, mydb_get(db, key));
     return 0;
 }
 #endif

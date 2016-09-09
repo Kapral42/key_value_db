@@ -7,3 +7,4 @@
 /* DB */
 #define FILE_DATA "../data.db"
 #define FILE_MDATA "../mdata.db"
+#define MAX_DELETED_ELEM 10
