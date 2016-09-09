@@ -1,12 +1,14 @@
 #pragma once
 
 #include "hashtab.h"
+#include "io.h"
 
 struct mydb_t {
     const char *fname_data;
     const char *fname_mdata;
     size_t size;
     struct hashtab_t *tab;
+    struct io_fd *fd;
 };
 
 struct mydb_t *mydb_init(const char *fname_data, const char *fname_mdata);

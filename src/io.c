@@ -14,6 +14,12 @@ struct io_fd *io_fd_init(const char *fname_data, const char *fname_mdata)
     if (!fd)
         return NULL;
 
+    /* If files not created */
+    fd->f_data = open(fname_data, O_CREAT, S_IRWXU);
+    fd->f_mdata = open(fname_mdata, O_CREAT, S_IRWXU);
+    close(fd->f_data);
+    close(fd->f_mdata);
+
     fd->f_data = open(fname_data, O_RDWR);
     fd->f_mdata = open(fname_mdata, O_RDWR);
     if (fd->f_data < 0 || fd->f_mdata < 0) {
@@ -32,8 +38,10 @@ void io_close(struct io_fd *fd)
 }
 
 /* Write with flushing buffer */
+//TODO: should returns offset
 int io_write(int fd, const char *buff, const size_t size)
 {
+    lseek(fd, 0, SEEK_END);
     int count = write(fd, buff, size);
     int i;
     /* If flushing error then try two more attempt */
