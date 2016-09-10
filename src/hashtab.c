@@ -182,6 +182,7 @@ int hashtab_lazy_delete(struct hashtab_t *tab, const char *key)
 
 void hashtab_real_delete(struct hashtab_t *tab)
 {
+    //TODO: integrate rewrite file
     /* Delete nodes */
     struct hashtab_node *old_node;
     struct hashtab_node *node;

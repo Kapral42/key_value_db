@@ -5,6 +5,7 @@
 #define CLIENT_SOCKET_FILE "../.client.socket"
 
 /* DB */
-#define FILE_DATA "../data.db"
-#define FILE_MDATA "../mdata.db"
+#define FILE_DATA "../data.mydb"
+#define FILE_MDATA "../mdata.mydb"
 #define MAX_DELETED_ELEM 10
+#define HASHTAB_SIZE 100

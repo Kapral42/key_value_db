@@ -1,17 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "names.h"
 #include "database.h"
 #include "hashtab.h"
 
-struct mydb_t *mydb_init(const char *fname_data, const char *fname_mdata)
+struct mydb_t *mydb_init(const char *fname_data, const char *fname_mdata, int extract)
 {
     struct mydb_t *db = malloc(sizeof(struct mydb_t));
-    if (!db) {
+    if (!db)
         return NULL;
-    }
 
     db->fname_data = fname_data;
     db->fname_mdata = fname_mdata;
@@ -23,7 +23,13 @@ struct mydb_t *mydb_init(const char *fname_data, const char *fname_mdata)
         return NULL;
     }
 
-    db->tab = hashtab_init(100);
+    if (extract && !access(fname_mdata, F_OK)
+            && !access(fname_data, F_OK)) {
+        mydb_extract(db);
+        return db;
+    }
+
+    db->tab = hashtab_init(HASHTAB_SIZE);
     if (!db->tab) {
         free(db);
         return NULL;
@@ -69,7 +75,7 @@ int mydb_put(struct mydb_t *db, const char *key, const char *value)
     if (node->value->links == 1) {
         offset = io_write(db->fd->f_data, node->value->value,
                             node->value->size);
-        printf("offset %s %d\n", node->value->value, offset);
+        //printf("offset %s %d\n", node->value->value, offset);
         if (offset < 0) {
             //TODO: we can't just exit
             return 1;
@@ -95,12 +101,93 @@ int mydb_erase(struct mydb_t *db, const char *key)
     return 0;
 }
 
+int mydb_save_mdata(struct mydb_t *db)
+{
+    struct hashtab_t *tab = db->tab;
+    FILE *file = db->fd->f_mdata;
+    int size = sizeof(size_t);
+
+    io_file_clear(file, db->fname_mdata);
+
+    /* Save count of bytes in a number */
+    unsigned char elem_size = (char) size;
+    fwrite(&elem_size, 1, 1, file);
+
+    /* Save count of hashtable elemrnts */
+    fwrite(&tab->count, size, 1, file);
+
+    /* Save offsets and lens of keys and values */
+    struct hashtab_node *node;
+    for (size_t i = 0; i < tab->tab_size; i++) {
+        node = tab->nodes[i];
+        while (node) {
+            fwrite(&node->key_offset, size, 1, file);
+            fwrite(&node->key_size, size, 1, file);
+            fwrite(&node->value->offset, size, 1, file);
+            fwrite(&node->value->size, size, 1, file);
+            node = node->next;
+        }
+    }
+    fflush(file);
+    return 0;
+}
+
+int mydb_extract(struct mydb_t *db)
+{
+    FILE *data = db->fd->f_data;
+    FILE *mdata = db->fd->f_mdata;
+
+    int elem_size = 0;
+    fread(&elem_size, 1, 1, mdata);
+
+    size_t count = 0;
+    fread(&count, elem_size, 1, mdata);
+
+    db->tab = hashtab_init(HASHTAB_SIZE);
+    if (!db->tab) {
+        return 1;
+    }
+
+    size_t key_offset, key_size, val_offset, val_size;
+    for (size_t i = 0; i < count; i++) {
+        fread(&key_offset, elem_size, 1, mdata);
+        fread(&key_size, elem_size, 1, mdata);
+        fread(&val_offset, elem_size, 1, mdata);
+        fread(&val_size, elem_size, 1, mdata);
+
+        char *key = (char*) malloc(sizeof(char) * key_size);
+        char *value = (char*) malloc(sizeof(char) * val_size);
+        if (!key || !value) {
+            free(key);
+            free(value);
+            return 1;
+        }
+        if (io_offset_read(data, key, key_size, key_offset) <= 0 ||
+            io_offset_read(data, value, val_size, val_offset) <= 0) {
+            free(key);
+            free(value);
+            return 1;
+        }
+
+        hashtab_push(db->tab, key, value);
+    }
+
+    return db->tab->count == count ? 0 : 1;
+}
+
+
 void mydb_close(struct mydb_t *db)
 {
-    //TODO:save mdata and free everything
-    
-
+    /* Save mdata and free everything */
+    if (db->tab->del_count) {
+        hashtab_real_delete(db->tab);
+    }
+    mydb_save_mdata(db);
+    io_close(db->fd);
     hashtab_free(db->tab);
+    //free(db->fname_data);
+    //free(db->fname_mdata);
+    free(db);
 }
 
 #if 1
@@ -110,11 +197,14 @@ void mydb_close(struct mydb_t *db)
 #include <errno.h>
 int main(int argc, const char *argv[])
 {
-    struct mydb_t *db = mydb_init(FILE_DATA, FILE_MDATA);
+    struct mydb_t *db = mydb_init(FILE_DATA, FILE_MDATA, 1);
     if (!db) {
         printf("DB not created\n");
         return 1;
     }
+    printf("List after init:\n");
+    mydb_list(db);
+    printf("---\n");
 /*    char *key = "123";
     char *value = "456";
     if (!mydb_put(db, key, value)) {
@@ -143,6 +233,7 @@ int main(int argc, const char *argv[])
     mydb_list(db);
 
   //  printf("get val (key:%s) %s\n", key, mydb_get(db, key));
+    mydb_close(db);
     return 0;
 }
 #endif

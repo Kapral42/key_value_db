@@ -56,8 +56,13 @@ int io_read(FILE *fd, char *buff, const size_t size)
 
 int io_offset_read(FILE *fd, char *buff, const size_t size, const size_t offset)
 {
-    fseek(fd, SEEK_SET, offset);
+    fseek(fd, offset, SEEK_SET);
     return fread(buff, 1, size, fd);
+}
+
+void io_file_clear(FILE *fd, const char *f_name)
+{
+    freopen(f_name, "w+", fd);
 }
 
 #if 0
