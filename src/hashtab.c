@@ -31,6 +31,7 @@ struct hashtab_t *hashtab_init(size_t size)
     tab->tab_size = size;
     tab->count = 0;
     tab->del_count = 0;
+    tab->val_count = 0;
     return tab;
 }
 
@@ -79,6 +80,7 @@ static struct hashtab_node *add_node(struct hashtab_t *tab,
             //delete_value(inode);
         }
         node->value = inode;
+        /* If node already exist but was removed */
         tab->del_count -= node->del ? 1 : 0;
         node->del = 0;
     }
@@ -110,6 +112,7 @@ static struct hashtab_inode *add_inode(struct hashtab_t *tab, const char *val)
         inode->size = val_len;
         inode->next = tab->inodes[index];
         tab->inodes[index] = inode;
+        tab->val_count++;
     } else {
         /* If val already exist in table */
         free(val);

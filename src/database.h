@@ -17,5 +17,5 @@ int mydb_put(struct mydb_t *db, const char *key, const char *value);
 const char * const mydb_get(struct mydb_t *db, const char *key);
 int mydb_erase(struct mydb_t *db, const char *key);
 int mydb_extract(struct mydb_t *db);
-int mydb_save_mdata(struct mydb_t *db);
+int mydb_save_mdata(struct mydb_t *db, int rewrite_dat);
 void mydb_close(struct mydb_t *db);

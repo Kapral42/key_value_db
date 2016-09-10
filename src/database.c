@@ -60,22 +60,27 @@ int mydb_put(struct mydb_t *db, const char *key, const char *value)
     strcpy(key_copy, key);
     strcpy(value_copy, value);
 
+    size_t key_count = db->tab->count;
+    size_t val_count = db->tab->val_count;
+
     struct hashtab_node *node = hashtab_push(db->tab, key_copy, value_copy);
 
-    //TODO: write to file
+    /* Write to file */
     int offset;
-    offset = io_write(db->fd->f_data, node->key, node->key_size);
-    printf("offset %s %d\n", node->key, offset);
-    if (offset < 0) {
-        //TODO: we can't just exit
-        return 1;
+    if (key_count < db->tab->count) {
+        offset = io_write(db->fd->f_data, node->key, node->key_size);
+        printf("offset %s %d\n", node->key, offset);
+        if (offset < 0) {
+            //TODO: we can't just exit
+            return 1;
+        }
+        node->key_offset = offset;
     }
-    node->key_offset = offset;
 
-    if (node->value->links == 1) {
+    if (val_count < db->tab->val_count) {
         offset = io_write(db->fd->f_data, node->value->value,
                             node->value->size);
-        //printf("offset %s %d\n", node->value->value, offset);
+        printf("offset %s %d\n", node->value->value, offset);
         if (offset < 0) {
             //TODO: we can't just exit
             return 1;
@@ -101,34 +106,53 @@ int mydb_erase(struct mydb_t *db, const char *key)
     return 0;
 }
 
-int mydb_save_mdata(struct mydb_t *db)
+int mydb_save_mdata(struct mydb_t *db, int rewrite_dat)
 {
     struct hashtab_t *tab = db->tab;
-    FILE *file = db->fd->f_mdata;
+    FILE *mdata = db->fd->f_mdata;
+    FILE *data = db->fd->f_data;
     int size = sizeof(size_t);
 
-    io_file_clear(file, db->fname_mdata);
+    io_file_clear(mdata, db->fname_mdata);
+
+    if (rewrite_dat) {
+        /* Clear data file */
+        io_file_clear(data, db->fname_data);
+
+        /* Rewrite all values */
+        struct hashtab_inode *inode;
+        for (size_t i = 0; i < tab->tab_size; i++) {
+            inode = tab->inodes[i];
+            while (inode) {
+                inode->offset = io_write(data, inode->value, inode->size);
+                inode = inode->next;
+            }
+        }
+    }
 
     /* Save count of bytes in a number */
     unsigned char elem_size = (char) size;
-    fwrite(&elem_size, 1, 1, file);
+    fwrite(&elem_size, 1, 1, mdata);
 
     /* Save count of hashtable elemrnts */
-    fwrite(&tab->count, size, 1, file);
+    fwrite(&tab->count, size, 1, mdata);
 
     /* Save offsets and lens of keys and values */
     struct hashtab_node *node;
     for (size_t i = 0; i < tab->tab_size; i++) {
         node = tab->nodes[i];
         while (node) {
-            fwrite(&node->key_offset, size, 1, file);
-            fwrite(&node->key_size, size, 1, file);
-            fwrite(&node->value->offset, size, 1, file);
-            fwrite(&node->value->size, size, 1, file);
+            if (rewrite_dat) {
+                node->key_offset = io_write(data, node->key, node->key_size);
+            }
+            fwrite(&node->key_offset, size, 1, mdata);
+            fwrite(&node->key_size, size, 1, mdata);
+            fwrite(&node->value->offset, size, 1, mdata);
+            fwrite(&node->value->size, size, 1, mdata);
             node = node->next;
         }
     }
-    fflush(file);
+    fflush(mdata);
     return 0;
 }
 
@@ -179,10 +203,12 @@ int mydb_extract(struct mydb_t *db)
 void mydb_close(struct mydb_t *db)
 {
     /* Save mdata and free everything */
+    int rw_flg = 0;
     if (db->tab->del_count) {
         hashtab_real_delete(db->tab);
+        rw_flg = 1;
     }
-    mydb_save_mdata(db);
+    mydb_save_mdata(db, rw_flg);
     io_close(db->fd);
     hashtab_free(db->tab);
     //free(db->fname_data);
@@ -229,7 +255,7 @@ int main(int argc, const char *argv[])
     mydb_erase(db, Keys[2]);
     mydb_erase(db, Keys[3]);
     printf("\n");
-    hashtab_real_delete(db->tab);
+    //hashtab_real_delete(db->tab);
     mydb_list(db);
 
   //  printf("get val (key:%s) %s\n", key, mydb_get(db, key));

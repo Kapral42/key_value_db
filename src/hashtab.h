@@ -25,6 +25,7 @@ struct hashtab_t {
     size_t tab_size;
     size_t count;
     size_t del_count;
+    size_t val_count;
 };
 
 struct hashtab_t *hashtab_init(size_t n);
