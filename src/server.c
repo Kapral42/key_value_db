@@ -9,6 +9,31 @@
 #include "names.h"
 #include "database.h"
 
+int create_soket(int thr)
+{
+    struct sockaddr_un sock_addr;
+    int sockfd;
+    socklen_t sockaddr_len = sizeof(sock_addr);
+
+    sockfd = socket(PF_UNIX, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("Socket creation failed!\n");
+        return -1;
+    }
+
+    sock_addr.sun_family = AF_UNIX;
+    sprintf(sock_addr.sun_path, "%s%d", SERVER_SOCKET_FILE, thr);
+    unlink(sock_addr.sun_path);
+    if (bind(sockfd, (struct sockaddr *) &sock_addr,
+                sizeof(sock_addr)) < 0) {
+        perror("Socket binding failed!\n");
+        close(sockfd);
+        return -1;
+    }
+
+    return sockfd;
+}
+
 void server_functs(struct mydb_t *db, char c_type, char **arg, int sockfd, struct sockaddr_un *addr, socklen_t addr_len)
 {
     switch (c_type) {
@@ -68,34 +93,20 @@ void server_functs(struct mydb_t *db, char c_type, char **arg, int sockfd, struc
                 mydb_close(db);
                 char res = 1;
                 sendto(sockfd, &res, 1, 0, (struct sockaddr *) addr, addr_len);
+
+                if (sockfd >= 0)
+                    close(sockfd);
+
                 exit(EXIT_SUCCESS);
             }
     }
 }
 
-int create_soket(int thr)
+int is_read(char c_type)
 {
-    struct sockaddr_un sock_addr;
-    int sockfd;
-    socklen_t sockaddr_len = sizeof(sock_addr);
-
-    sockfd = socket(PF_UNIX, SOCK_DGRAM, 0);
-    if (sockfd < 0) {
-        perror("Socket creation failed!\n");
-        return -1;
-    }
-
-    sock_addr.sun_family = AF_UNIX;
-    sprintf(sock_addr.sun_path, "%s%d", SERVER_SOCKET_FILE, thr);
-    unlink(sock_addr.sun_path);
-    if (bind(sockfd, (struct sockaddr *) &sock_addr,
-                sizeof(sock_addr)) < 0) {
-        perror("Socket binding failed!\n");
-        close(sockfd);
-        return -1;
-    }
-
-    return sockfd;
+    if (c_type == C_LIST || c_type == C_GET)
+        return 1;
+    return 0;
 }
 
 int main(int argc, const char *argv[])
@@ -107,6 +118,10 @@ int main(int argc, const char *argv[])
         return 1;
     }
 
+    omp_lock_t lock;
+    omp_init_lock(&lock);
+    int read_f = 0;
+
 
 #pragma omp parallel num_threads(SERVER_NUM_THREADS)
 {
@@ -117,8 +132,6 @@ int main(int argc, const char *argv[])
     if ((sockfd = create_soket(thr)) < 0) {
         exit(EXIT_FAILURE);
     }
-
-    int i = 0;
 
     struct sockaddr_un from_addr;
     socklen_t sockaddr_len = sizeof(struct sockaddr_un);
@@ -135,26 +148,40 @@ int main(int argc, const char *argv[])
 
         printf("%d] type: %d, len1 %d, len2 %d\n", thr, (int) c_type, arg_len[0], arg_len[1]);
 
-        for (i = 0; i < 2 && arg_len[i] > 0; i++) {
+        for (int i = 0; i < 2 && arg_len[i] > 0; i++) {
             arg[i] = malloc(arg_len[i]);
             recv_len = recvfrom(sockfd, arg[i], arg_len[i], 0,
                         (struct sockaddr *) &from_addr, &sockaddr_len);
             printf("%d] arg%d \"%s\"\n", thr, i, arg[i]);
         }
 
+        omp_set_lock(&lock);
+        if (is_read(c_type)) {
+            omp_unset_lock(&lock);
+            #pragma omp atomic
+            read_f++;
+        } else {
+            while (read_f)
+                sleep(10);
+        }
 
         server_functs(db, c_type, arg, sockfd,
                         &from_addr, sockaddr_len);
 
-        printf("%d-----------------------\n",thr);
+        if (is_read(c_type)) {
+            #pragma omp atomic
+            read_f--;
+        } else {
+            omp_unset_lock(&lock);
+        }
+
+        for (int i = 0; i < 2 && arg_len[i] > 0; i++)
+            free(arg[i]);
+
         fflush(stdout);
     }
 
-    if (sockfd >= 0) {
-        close(sockfd);
-    }
 }
-
 
     return EXIT_SUCCESS;
 }
