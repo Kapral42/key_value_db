@@ -38,9 +38,9 @@ struct mydb_t *mydb_init(const char *fname_data, const char *fname_mdata, int ex
     return db;
 }
 
-int mydb_list(struct mydb_t* db)
+char const **mydb_list(struct mydb_t* db, size_t *count)
 {
-    return hashtab_print_keys(db->tab);
+    return hashtab_list(db->tab, count);
 }
 
 int mydb_put(struct mydb_t *db, const char *key, const char *value)
@@ -91,7 +91,7 @@ int mydb_put(struct mydb_t *db, const char *key, const char *value)
     return 0;
 }
 
-char const * const mydb_get(struct mydb_t *db, const char *key)
+char const *mydb_get(struct mydb_t *db, const char *key)
 {
     return hashtab_get_value(db->tab, key);
 }
@@ -101,7 +101,6 @@ int mydb_erase(struct mydb_t *db, const char *key)
     hashtab_lazy_delete(db->tab, key);
     if (db->tab->del_count > MAX_DELETED_ELEM) {
         hashtab_real_delete(db->tab);
-        //TODO: rewrite files
     }
     return 0;
 }

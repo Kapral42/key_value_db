@@ -33,5 +33,5 @@ struct hashtab_node * const hashtab_push(struct hashtab_t *tab, const char *key,
 char const * const hashtab_get_value(struct hashtab_t *tab, const char* key);
 int hashtab_lazy_delete(struct hashtab_t *tab, const char *key);
 void hashtab_free(struct hashtab_t *tab);
-int hashtab_print_keys(struct hashtab_t *tab);
+char const **hashtab_list(struct hashtab_t *tab, size_t *count);
 void hashtab_real_delete(struct hashtab_t *tab);

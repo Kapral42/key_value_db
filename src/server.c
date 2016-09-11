@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -7,6 +8,63 @@
 
 #include "names.h"
 #include "database.h"
+
+void server_functs(struct mydb_t *db, char c_type, char **arg, int sockfd, struct sockaddr_un *addr, socklen_t addr_len)
+{
+    switch (c_type) {
+        case C_PUT:
+            {
+                char res = mydb_put(db, arg[0], arg[1]) ? 0 : 1;
+                sendto(sockfd, &res, 1, 0, (struct sockaddr *) addr, addr_len);
+                break;
+            }
+        case C_GET:
+            {
+                const char *val = mydb_get(db, arg[0]);
+                int count = !val ? 0 : 1;
+
+                sendto(sockfd, &count, sizeof(int), 0,
+                        (struct sockaddr *) addr, addr_len);
+
+                if (count) {
+                    int buf_size = strlen(val) + 1;
+
+                    sendto(sockfd, &buf_size, sizeof(int), 0,
+                            (struct sockaddr *) addr, addr_len);
+
+                    sendto(sockfd, val, buf_size, 0,
+                            (struct sockaddr *) addr, addr_len);
+                }
+
+                break;
+            }
+        case C_LIST:
+            {
+                size_t count;
+                const char **list = mydb_list(db, &count);
+                sendto(sockfd, &count, sizeof(int), 0,
+                        (struct sockaddr *) addr, addr_len);
+
+                for (size_t i = 0; i < count; i++) {
+                    int buf_size = strlen(list[i]) + 1;
+
+                    sendto(sockfd, &buf_size, sizeof(int), 0,
+                            (struct sockaddr *) addr, addr_len);
+
+                    sendto(sockfd, list[i], buf_size, 0,
+                            (struct sockaddr *) addr, addr_len);
+                }
+                free(list);
+                break;
+            }
+        case C_ERACE:
+            {
+                char res = mydb_erase(db, arg[0]) ? 0 : 1;
+                sendto(sockfd, &res, 1, 0, (struct sockaddr *) addr, addr_len);
+                break;
+            }
+    }
+}
 
 int create_soket(int thr)
 {
@@ -57,17 +115,17 @@ int main(int argc, const char *argv[])
 
     struct sockaddr_un from_addr;
     socklen_t sockaddr_len = sizeof(struct sockaddr_un);
-    unsigned char c_type, ibuf[20], *arg[2];
+    char c_type, ibuf[20], *arg[2];
     int arg_len[2];
 
     for(;;) {
         recv_len = recvfrom(sockfd, ibuf, 20, 0,
                     (struct sockaddr *) &from_addr, &sockaddr_len);
-        i++;
-        //printf("%d recvfrom: %s\n", i, buf); fflush(stdout);
+
         c_type = (unsigned char) ibuf[0];
         arg_len[0] = *((int*)&ibuf[1]);
         arg_len[1] = *((int*)&ibuf[1 + sizeof(int)]);
+
         printf("%d] type: %d, len1 %d, len2 %d\n", thr, (int) c_type, arg_len[0], arg_len[1]);
 
         for (i = 0; i < 2 && arg_len[i] > 0; i++) {
@@ -77,12 +135,16 @@ int main(int argc, const char *argv[])
             printf("%d] arg%d \"%s\"\n", thr, i, arg[i]);
         }
 
+
+        server_functs(db, c_type, arg, sockfd,
+                        &from_addr, sockaddr_len);
+ //       printf("LIST:\n");
+//        mydb_list(db);
+  //      char res = 1;
+   //     sendto(sockfd, &res, 1, 0, (struct sockaddr *)&from_addr, sockaddr_len);
+
+        printf("%d-----------------------\n",thr);
         fflush(stdout);
-
-        char res = 1;
-        //send(sockfd, &res, 1, 0);
-        sendto(sockfd, &res, 1, 0, (struct sockaddr *)&from_addr, sockaddr_len);
-
     }
 
     if (sockfd >= 0) {

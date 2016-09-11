@@ -12,9 +12,9 @@ struct mydb_t {
 };
 
 struct mydb_t *mydb_init(const char *fname_data, const char *fname_mdata, int extract);
-int mydb_list(struct mydb_t *db);
+const char **mydb_list(struct mydb_t *db, size_t *count);
 int mydb_put(struct mydb_t *db, const char *key, const char *value);
-const char * const mydb_get(struct mydb_t *db, const char *key);
+const char *mydb_get(struct mydb_t *db, const char *key);
 int mydb_erase(struct mydb_t *db, const char *key);
 int mydb_extract(struct mydb_t *db);
 int mydb_save_mdata(struct mydb_t *db, int rewrite_dat);

@@ -6,6 +6,46 @@
 
 #include "names.h"
 
+int client_functs(char c_type, int sockfd)
+{
+    if (c_type == C_PUT || c_type == C_ERACE) {
+        char res = 0;
+        recv(sockfd, &res, 1, 0);
+        if (res == 1) {
+            printf("Operation SUCCESS\n");
+            return 0;
+        }
+    } else if (c_type == C_GET || c_type == C_LIST) {
+        int i = 0, count = 0;
+
+        recv(sockfd, &count, sizeof(int), 0);
+        if (count > 0) {
+            for (i = 0; i < count; i++) {
+                int buf_size = 0;
+                recv(sockfd, &buf_size, sizeof(int), 0);
+                if (buf_size < 0)
+                    break;
+
+                char *buf;
+                if (!(buf = malloc(buf_size)))
+                    break;
+
+                recv(sockfd, buf, buf_size, 0);
+                printf("%s\n", buf);
+                free(buf);
+            }
+        }
+        if (i == count) {
+            printf("Operation SUCCESS\n");
+            fflush(stdout);
+            return 0;
+        }
+    }
+
+    printf("Operation FAILURE\n");
+    return 1;
+}
+
 int connect_to_server(int nserv, char *client_socket_f)
 {
     int sockfd;
@@ -49,7 +89,7 @@ void usage()
 {
     printf("Usage: ./client COMMAND [COMMAND ARGS]\n");
     printf("COMMAND:\n\tlist\n\tput <key> <value>");
-    printf("\n\tget <key>\n\terace <key>\n");
+    printf("\n\tget <key>\n\terase <key>\n");
 }
 
 int main(int argc, const char *argv[])
@@ -69,7 +109,7 @@ int main(int argc, const char *argv[])
     } else if (!strcmp(argv[1], "get")) {
         c_type = C_GET;
         n_arg = 1;
-    } else if (!strcmp(argv[1], "erace")) {
+    } else if (!strcmp(argv[1], "erase")) {
         c_type = C_ERACE;
         n_arg = 1;
     } else {
@@ -100,29 +140,24 @@ int main(int argc, const char *argv[])
     memcpy(ibuf + 1, &buf1_len, sizeof(int));
     memcpy(ibuf + 1 + sizeof(int), &buf2_len, sizeof(int));
 
-   // strcpy(buf, "Hello server!");
     send(sockfd, ibuf, ibuf_len, 0);
+    printf("send i\n");
 
     if (buf1_len)
         send(sockfd, argv[2], buf1_len, 0);
-    if (buf1_len)
+    if (buf2_len)
         send(sockfd, argv[3], buf2_len, 0);
-    //    perror("Send message failed!\n");
 
-    char res = 0;
-    recv(sockfd, &res, 1, 0);
-    if (res == 1)
-        printf("SUCCESS\n");
-    else
-        printf("FAILURE\n");
-
-
+    /* Processing server answers */
+    if (client_functs(c_type, sockfd))
+        exit(EXIT_FAILURE);
 
     if (sockfd >= 0) {
         close(sockfd);
     }
 
+    free(ibuf);
     unlink(client_socket_f);
 
-    return EXIT_SUCCESS;
+    exit(EXIT_SUCCESS);
 }

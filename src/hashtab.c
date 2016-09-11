@@ -144,21 +144,26 @@ struct hashtab_node * const hashtab_push(struct hashtab_t *tab,
     return node;
 }
 
-int hashtab_print_keys(struct hashtab_t *tab)
+char const **hashtab_list(struct hashtab_t *tab, size_t *n)
 {
     size_t count = 0;
+    char **list;
+    if (!(list = malloc(tab->count * sizeof(char*))))
+        return NULL;
 
     for (size_t i = 0; i < tab->tab_size; i++) {
         struct hashtab_node *node = tab->nodes[i];
         while (node) {
             if (!node->del) {
+                list[count] = node->key;
                 count++;
                 printf("%ld. \"%s\"\n", count, node->key);
             }
             node = node->next;
         }
     }
-    return (int) count;
+    *n = count;
+    return list;
 }
 
 char const * const hashtab_get_value(struct hashtab_t *tab, const char* key)
