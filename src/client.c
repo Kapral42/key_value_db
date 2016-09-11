@@ -6,46 +6,7 @@
 
 #include "names.h"
 
-int client_functs(char c_type, int sockfd)
-{
-    if (c_type == C_PUT || c_type == C_ERACE || c_type == C_EXIT) {
-        char res = 0;
-        recv(sockfd, &res, 1, 0);
-        if (res == 1) {
-            printf("Operation SUCCESS\n");
-            return 0;
-        }
-    } else if (c_type == C_GET || c_type == C_LIST) {
-        int i = 0, count = 0;
-
-        recv(sockfd, &count, sizeof(int), 0);
-        if (count > 0) {
-            for (i = 0; i < count; i++) {
-                int buf_size = 0;
-                recv(sockfd, &buf_size, sizeof(int), 0);
-                if (buf_size < 0)
-                    break;
-
-                char *buf;
-                if (!(buf = malloc(buf_size)))
-                    break;
-
-                recv(sockfd, buf, buf_size, 0);
-                printf("%s\n", buf);
-                free(buf);
-            }
-        }
-        if (i == count) {
-            printf("Operation SUCCESS\n");
-            fflush(stdout);
-            return 0;
-        }
-    }
-
-    printf("Operation FAILURE\n");
-    return 1;
-}
-
+/* Create new socket for current process */
 int connect_to_server(int nserv, char *client_socket_f)
 {
     int sockfd;
@@ -83,6 +44,47 @@ int connect_to_server(int nserv, char *client_socket_f)
     }
 
     return sockfd;
+}
+
+/* Waiting for answers from server for current requests */
+int client_functs(char c_type, int sockfd)
+{
+    if (c_type == C_PUT || c_type == C_ERACE || c_type == C_EXIT) {
+        char res = 0;
+        recv(sockfd, &res, 1, 0);
+        if (res == 1) {
+            //printf("Operation SUCCESS\n");
+            return 0;
+        }
+    } else if (c_type == C_GET || c_type == C_LIST) {
+        int i = 0, count = 0;
+
+        recv(sockfd, &count, sizeof(int), 0);
+        if (count > 0) {
+            for (i = 0; i < count; i++) {
+                int buf_size = 0;
+                recv(sockfd, &buf_size, sizeof(int), 0);
+                if (buf_size < 0)
+                    break;
+
+                char *buf;
+                if (!(buf = malloc(buf_size)))
+                    break;
+
+                recv(sockfd, buf, buf_size, 0);
+                printf("%s\n", buf);
+                free(buf);
+            }
+        }
+        if (i == count) {
+            //printf("Operation SUCCESS\n");
+            fflush(stdout);
+            return 0;
+        }
+    }
+
+    printf("Operation FAILURE\n");
+    return 1;
 }
 
 void usage()
@@ -133,6 +135,7 @@ int main(int argc, const char *argv[])
         exit(EXIT_FAILURE);
 
 
+    /* Create info about future request */
     int ibuf_len = 1 + sizeof(int) * 2;
     int buf1_len = n_arg >= 1 ? strlen(argv[2]) + 1 : 0;
     int buf2_len = n_arg >= 2 ? strlen(argv[3]) + 1 : 0;
@@ -143,8 +146,8 @@ int main(int argc, const char *argv[])
     memcpy(ibuf + 1 + sizeof(int), &buf2_len, sizeof(int));
 
     send(sockfd, ibuf, ibuf_len, 0);
-    printf("send i\n");
 
+    /* Sending of args */
     if (buf1_len)
         send(sockfd, argv[2], buf1_len, 0);
     if (buf2_len)

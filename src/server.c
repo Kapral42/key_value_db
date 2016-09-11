@@ -9,11 +9,11 @@
 #include "names.h"
 #include "database.h"
 
+/* Creation new socket for current thread */
 int create_soket(int thr)
 {
     struct sockaddr_un sock_addr;
     int sockfd;
-    socklen_t sockaddr_len = sizeof(sock_addr);
 
     sockfd = socket(PF_UNIX, SOCK_DGRAM, 0);
     if (sockfd < 0) {
@@ -34,6 +34,8 @@ int create_soket(int thr)
     return sockfd;
 }
 
+/* Wrappers for call database functions */
+/* Call of DB functions and send of ansvers to client */
 void server_functs(struct mydb_t *db, char c_type, char **arg, int sockfd, struct sockaddr_un *addr, socklen_t addr_len)
 {
     switch (c_type) {
@@ -102,7 +104,7 @@ void server_functs(struct mydb_t *db, char c_type, char **arg, int sockfd, struc
     }
 }
 
-int is_read(char c_type)
+int is_read(const char c_type)
 {
     if (c_type == C_LIST || c_type == C_GET)
         return 1;
@@ -120,15 +122,17 @@ int main(int argc, const char *argv[])
 
     omp_lock_t lock;
     omp_init_lock(&lock);
+
+    /* Count of working read functions at the moment */
     int read_f = 0;
 
-
+/* Init of parallel region */
 #pragma omp parallel num_threads(SERVER_NUM_THREADS)
 {
     int thr = omp_get_thread_num();
 
     /* Server init */
-    int sockfd, recv_len;
+    int sockfd ;
     if ((sockfd = create_soket(thr)) < 0) {
         exit(EXIT_FAILURE);
     }
@@ -139,28 +143,36 @@ int main(int argc, const char *argv[])
     int arg_len[2];
 
     for(;;) {
-        recv_len = recvfrom(sockfd, ibuf, 20, 0,
+
+        /* Get info about future request */
+        recvfrom(sockfd, ibuf, 20, 0,
                     (struct sockaddr *) &from_addr, &sockaddr_len);
 
+        /* Decode the info */
         c_type = (unsigned char) ibuf[0];
         arg_len[0] = *((int*)&ibuf[1]);
         arg_len[1] = *((int*)&ibuf[1 + sizeof(int)]);
 
-        printf("%d] type: %d, len1 %d, len2 %d\n", thr, (int) c_type, arg_len[0], arg_len[1]);
-
+        /* Get request */
         for (int i = 0; i < 2 && arg_len[i] > 0; i++) {
             arg[i] = malloc(arg_len[i]);
-            recv_len = recvfrom(sockfd, arg[i], arg_len[i], 0,
+            recvfrom(sockfd, arg[i], arg_len[i], 0,
                         (struct sockaddr *) &from_addr, &sockaddr_len);
-            printf("%d] arg%d \"%s\"\n", thr, i, arg[i]);
         }
+
+        /* Request to DB */
 
         omp_set_lock(&lock);
         if (is_read(c_type)) {
+            /* If it's just read function then free the lock */
             omp_unset_lock(&lock);
+            /* Increment the count of working read functions */
             #pragma omp atomic
             read_f++;
         } else {
+            /* If it's write function then
+             * wait for complete all of read function
+             */
             while (read_f)
                 sleep(10);
         }
@@ -169,18 +181,17 @@ int main(int argc, const char *argv[])
                         &from_addr, sockaddr_len);
 
         if (is_read(c_type)) {
+            /* Decrement the count of working read functions */
             #pragma omp atomic
             read_f--;
         } else {
+            /* Free the lock */
             omp_unset_lock(&lock);
         }
 
         for (int i = 0; i < 2 && arg_len[i] > 0; i++)
             free(arg[i]);
-
-        fflush(stdout);
     }
-
 }
 
     return EXIT_SUCCESS;

@@ -7,22 +7,34 @@
 #include "database.h"
 #include "hashtab.h"
 
+/* Create new DB from scratch or from disk */
 struct mydb_t *mydb_init(const char *fname_data, const char *fname_mdata, int extract)
 {
     struct mydb_t *db = malloc(sizeof(struct mydb_t));
     if (!db)
         return NULL;
 
-    db->fname_data = fname_data;
-    db->fname_mdata = fname_mdata;
+    db->fname_data = malloc(strlen(fname_data) + 1);
+    db->fname_mdata = malloc(strlen(fname_mdata) + 1);
+    if (!db->fname_data || !db->fname_mdata) {
+        free(db->fname_data);
+        free(db->fname_mdata);
+        free(db);
+        return NULL;
+    }
+    strcpy(db->fname_data, fname_data);
+    strcpy(db->fname_mdata, fname_mdata);
+
     db->size = 0;
 
+    /* Init file descriptions for DB files */ 
     db->fd = io_fd_init(fname_data, fname_mdata);
     if (!db->fd) {
         free(db);
         return NULL;
     }
 
+    /* If DB already exist on the disk then extraction it */
     if (extract && !access(fname_mdata, F_OK)
             && !access(fname_data, F_OK)) {
         mydb_extract(db);
@@ -38,6 +50,7 @@ struct mydb_t *mydb_init(const char *fname_data, const char *fname_mdata, int ex
     return db;
 }
 
+/* Get const list of pointers to all keys in the table */
 char const **mydb_list(struct mydb_t* db, size_t *count)
 {
     return hashtab_list(db->tab, count);
@@ -67,24 +80,26 @@ int mydb_put(struct mydb_t *db, const char *key, const char *value)
 
     /* Write to file */
     int offset;
+
+    /* If key was realy added to table then store it to disk */
     if (key_count < db->tab->count) {
         offset = io_write(db->fd->f_data, node->key, node->key_size);
-        printf("offset %s %d\n", node->key, offset);
         if (offset < 0) {
-            //TODO: we can't just exit
             return 1;
         }
+
         node->key_offset = offset;
     }
 
+    /* If value was realy added to table then store it to disk */
     if (val_count < db->tab->val_count) {
         offset = io_write(db->fd->f_data, node->value->value,
                             node->value->size);
-        printf("offset %s %d\n", node->value->value, offset);
+
         if (offset < 0) {
-            //TODO: we can't just exit
             return 1;
         }
+
         node->value->offset = offset;
     }
 
@@ -96,6 +111,7 @@ char const *mydb_get(struct mydb_t *db, const char *key)
     return hashtab_get_value(db->tab, key);
 }
 
+/* Lazy or real delete operation */
 int mydb_erase(struct mydb_t *db, const char *key)
 {
     hashtab_lazy_delete(db->tab, key);
@@ -105,6 +121,7 @@ int mydb_erase(struct mydb_t *db, const char *key)
     return 0;
 }
 
+/* Store DB to disk */
 int mydb_save_mdata(struct mydb_t *db, int rewrite_dat)
 {
     struct hashtab_t *tab = db->tab;
@@ -155,6 +172,7 @@ int mydb_save_mdata(struct mydb_t *db, int rewrite_dat)
     return 0;
 }
 
+/* Extract DB from disk */
 int mydb_extract(struct mydb_t *db)
 {
     FILE *data = db->fd->f_data;
@@ -198,7 +216,6 @@ int mydb_extract(struct mydb_t *db)
     return db->tab->count == count ? 0 : 1;
 }
 
-
 void mydb_close(struct mydb_t *db)
 {
     /* Save mdata and free everything */
@@ -210,55 +227,7 @@ void mydb_close(struct mydb_t *db)
     mydb_save_mdata(db, rw_flg);
     io_close(db->fd);
     hashtab_free(db->tab);
-    //free(db->fname_data);
-    //free(db->fname_mdata);
+    free(db->fname_data);
+    free(db->fname_mdata);
     free(db);
 }
-
-#if 0
-#include <unistd.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <errno.h>
-int main(int argc, const char *argv[])
-{
-    struct mydb_t *db = mydb_init(FILE_DATA, FILE_MDATA, 1);
-    if (!db) {
-        printf("DB not created\n");
-        return 1;
-    }
-    printf("List after init:\n");
-    mydb_list(db);
-    printf("---\n");
-/*    char *key = "123";
-    char *value = "456";
-    if (!mydb_put(db, key, value)) {
-        printf("PUT SUCCESS\n");
-    }
-    char *key1 = "789";
-    char *value1 = "456";
-    if (!mydb_put(db, key1, value1)) {
-        printf("PUT SUCCESS\n");
-    } */
-    char *Keys[] = {"01", "02", "03", "04",
-                   "05", "06", "07", "08"};
-    char *Values[] = {"o1", "o2", "o3", "o4",
-                     "o5", "o6", "o7", "o8"};
-    for (int i = 0; i < 8; i++) {
-        if (!mydb_put(db, Keys[i], Values[i])) {
-            printf("%d PUT SUCCESS\n", i);
-        }
-    }
-    mydb_list(db);
-    mydb_erase(db, Keys[1]);
-    mydb_erase(db, Keys[2]);
-    mydb_erase(db, Keys[3]);
-    printf("\n");
-    //hashtab_real_delete(db->tab);
-    mydb_list(db);
-
-  //  printf("get val (key:%s) %s\n", key, mydb_get(db, key));
-    mydb_close(db);
-    return 0;
-}
-#endif

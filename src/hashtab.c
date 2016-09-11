@@ -6,7 +6,7 @@
 #include "hash.h"
 
 /* Creation new hashtable, allocation of tables and filling fields */
-struct hashtab_t *hashtab_init(size_t size)
+struct hashtab_t *hashtab_init(const size_t size)
 {
     struct hashtab_t*tab;
 
@@ -15,21 +15,21 @@ struct hashtab_t *hashtab_init(size_t size)
     }
 
     tab = malloc(sizeof(struct hashtab_t));
-    if (tab == NULL) {
+    if (!tab) {
         return NULL;
     }
 
     tab->nodes = (struct hashtab_node**) calloc(size,
                             sizeof(struct hashtab_node*));
 
-    if (tab->nodes == NULL) {
+    if (!tab->nodes) {
         return NULL;
     }
 
     tab->inodes = (struct hashtab_inode**) calloc(size,
                             sizeof(struct hashtab_inode*));
 
-    if (tab->inodes == NULL) {
+    if (!tab->inodes) {
         return NULL;
     }
 
@@ -37,6 +37,7 @@ struct hashtab_t *hashtab_init(size_t size)
     tab->count = 0;
     tab->del_count = 0;
     tab->val_count = 0;
+
     return tab;
 }
 
@@ -62,7 +63,7 @@ static struct hashtab_node *get_node(struct hashtab_t *tab, const char *key,
 
 /* Add new key or change old equal key */
 static struct hashtab_node *add_node(struct hashtab_t *tab,
-        const char *key, struct hashtab_inode *inode)
+        char *key, struct hashtab_inode *inode)
 {
     size_t key_len = strlen(key) + 1;
     size_t index;
@@ -70,6 +71,7 @@ static struct hashtab_node *add_node(struct hashtab_t *tab,
 
     /* Modify or create new node */
     if (!node) {
+        /* New node */
         if ((node = malloc(sizeof(struct hashtab_node))) == NULL ) {
             return NULL;
         }
@@ -83,6 +85,8 @@ static struct hashtab_node *add_node(struct hashtab_t *tab,
     } else {
         /* If key already exist in table */
         if (--node->value->links <= 0) {
+            /* If value links = 0 it's means "lazy delete" */
+            /* Value will be deleted on a real_delete stage */
             //delete_value(inode);
         }
         node->value = inode;
@@ -94,7 +98,7 @@ static struct hashtab_node *add_node(struct hashtab_t *tab,
 }
 
 /* Add new value or merge equal value */
-static struct hashtab_inode *add_inode(struct hashtab_t *tab, const char *val)
+static struct hashtab_inode *add_inode(struct hashtab_t *tab, char *val)
 {
     size_t val_len = strlen(val) + 1;
     size_t index = (size_t) my_hash(val, val_len) % tab->tab_size;
@@ -107,11 +111,13 @@ static struct hashtab_inode *add_inode(struct hashtab_t *tab, const char *val)
         }
         inode = inode->next;
     }
+
     /* Modify or create new inode */
     if (!inode) {
         if ((inode = malloc(sizeof(struct hashtab_inode))) == NULL ) {
             return NULL;
         }
+
         inode->value = val;
         inode->offset = 0;
         inode->links = 1;
@@ -127,15 +133,17 @@ static struct hashtab_inode *add_inode(struct hashtab_t *tab, const char *val)
     return inode;
 }
 
-
+/* Push to table */
 struct hashtab_node * const hashtab_push(struct hashtab_t *tab,
-                            const char *key, const char *val)
+                            char *key, char *val)
 {
+    /* Add or merge value */
     struct hashtab_inode *inode = add_inode(tab, val);
     if (!inode) {
         return NULL;
     }
 
+    /* Add or merge key */
     struct hashtab_node *node = add_node(tab, key, inode);
     if (!node) {
         return NULL;
@@ -144,10 +152,12 @@ struct hashtab_node * const hashtab_push(struct hashtab_t *tab,
     return node;
 }
 
-char const **hashtab_list(struct hashtab_t *tab, size_t *n)
+/* Returns const list of all keys */
+const char **hashtab_list(struct hashtab_t *tab, size_t *n)
 {
     size_t count = 0;
-    char **list;
+    const char **list;
+
     if (!(list = malloc(tab->count * sizeof(char*))))
         return NULL;
 
@@ -157,15 +167,16 @@ char const **hashtab_list(struct hashtab_t *tab, size_t *n)
             if (!node->del) {
                 list[count] = node->key;
                 count++;
-                printf("%ld. \"%s\"\n", count, node->key);
             }
             node = node->next;
         }
     }
+
     *n = count;
     return list;
 }
 
+/* Returns const pointer to value string */
 char const * const hashtab_get_value(struct hashtab_t *tab, const char* key)
 {
     size_t key_len = strlen(key) + 1;
@@ -178,6 +189,7 @@ char const * const hashtab_get_value(struct hashtab_t *tab, const char* key)
     return node->value->value;
 }
 
+/* Mark the node like deleted */
 int hashtab_lazy_delete(struct hashtab_t *tab, const char *key)
 {
     size_t key_len = strlen(key) + 1;
@@ -195,6 +207,7 @@ int hashtab_lazy_delete(struct hashtab_t *tab, const char *key)
     return 0;
 }
 
+/* Delete all "trash" nodes and values */
 void hashtab_real_delete(struct hashtab_t *tab)
 {
     //TODO: integrate rewrite file

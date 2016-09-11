@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+/* Realization of CRC8 not from zlib */
 #ifndef ZLIB
 
 /* 8-bit CRC with polynomial x^8+x^6+x^3+x^2+1, 0x14D.
@@ -48,11 +49,12 @@ unsigned crc8(unsigned crc, const unsigned char *data, size_t len)
 unsigned long my_hash(const char *buff, size_t size)
 {
     unsigned crc = 0;
-    crc = crc8(crc, buff, size);
+    crc = crc8(crc, (unsigned char*) buff, size);
     return (unsigned long) crc;
 
 }
 
+/* Use zlib */
 #else
 
 #include <zlib.h>
@@ -60,30 +62,8 @@ unsigned long my_hash(const char *buff, size_t size)
 unsigned long my_hash(const char *buff, size_t size)
 {
     uLong crc = crc32(0L, Z_NULL, 0);
-    crc = crc32(crc, buff, size);
+    crc = crc32(crc, (unsigned char*) buff, size);
     return (unsigned long) crc;
 
 }
 #endif
-
-/*
-int main(int argc, const char *argv[])
-{
-    char *buff1 = "1234567890987654321";
-    char *buff2 = "1234567890987654321";
-    unsigned long crc1 = my_hash(buff1, 20);
-    unsigned long crc2 = my_hash(buff2, 20);
-
-    if (crc1 == crc2) {
-        printf("True\n");
-    } else {
-        printf("False\n");
-    }
-    printf("%d\n", sizeof(unsigned long));
-    printf("%d\n", sizeof(unsigned));
-    printf("%d\n", sizeof(size_t));
-
-
-    return 0;
-}
-*/
