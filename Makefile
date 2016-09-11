@@ -1,19 +1,20 @@
 CC=gcc
-CFLAGS= -Wall -openmp -g
-LDFLAGS= -openmp
+CFLAGS= -Wall -fopenmp -g
+LDFLAGS= -fopenmp
 
 SOURCES_S=src/database.c src/hash.c src/hashtab.c src/server.c src/io.c
+SOURCES_C=src/client.c
 
 OBJECTS_S=$(SOURCES_S:.c=.o)
-	SERVER=server
+OBJECTS_C=$(SOURCES_C:.c=.o)
 
-all: $(SOURCES_S) $(SERVER) client
+all: $(SOURCES_S) server client
 
-$(SERVER): $(OBJECTS_S)
+server: $(OBJECTS_S)
 	$(CC) $(LDFLAGS) $(OBJECTS_S) -o $@
 
-client:
-	$(CC) $(CFLAGS) src/client.c -o client
+client: $(OBJECTS_C)
+	$(CC) $(LFLAGS) $(OBJECTS_C) -o client
 
 .c.o:
 	$(CC) -c $(CFLAGS) $< -o $@
