@@ -5,6 +5,7 @@
 #include "hashtab.h"
 #include "hash.h"
 
+/* Creation new hashtable, allocation of tables and filling fields */
 struct hashtab_t *hashtab_init(size_t size)
 {
     struct hashtab_t*tab;
@@ -18,12 +19,16 @@ struct hashtab_t *hashtab_init(size_t size)
         return NULL;
     }
 
-    tab->nodes = (struct hashtab_node**) calloc(size, sizeof(struct hashtab_node*));
+    tab->nodes = (struct hashtab_node**) calloc(size,
+                            sizeof(struct hashtab_node*));
+
     if (tab->nodes == NULL) {
         return NULL;
     }
 
-    tab->inodes = (struct hashtab_inode**) calloc(size, sizeof(struct hashtab_inode*));
+    tab->inodes = (struct hashtab_inode**) calloc(size,
+                            sizeof(struct hashtab_inode*));
+
     if (tab->inodes == NULL) {
         return NULL;
     }
@@ -35,6 +40,7 @@ struct hashtab_t *hashtab_init(size_t size)
     return tab;
 }
 
+/* Search of node in the hashtable */
 static struct hashtab_node *get_node(struct hashtab_t *tab, const char *key,
         size_t key_len, size_t *i)
 {
@@ -122,7 +128,8 @@ static struct hashtab_inode *add_inode(struct hashtab_t *tab, const char *val)
 }
 
 
-struct hashtab_node * const hashtab_push(struct hashtab_t *tab, const char *key, const char *val)
+struct hashtab_node * const hashtab_push(struct hashtab_t *tab,
+                            const char *key, const char *val)
 {
     struct hashtab_inode *inode = add_inode(tab, val);
     if (!inode) {
@@ -193,8 +200,10 @@ void hashtab_real_delete(struct hashtab_t *tab)
     int del_flg;
 
     for (size_t i = 0; i < tab->tab_size; i++) {
+
         old_node = NULL;
         node = tab->nodes[i];
+
         while (node) {
             /* free each deleted nodes */
             del_flg = 0;
@@ -208,12 +217,14 @@ void hashtab_real_delete(struct hashtab_t *tab)
                     del_node = node;
                     node = tab->nodes[i];
                 }
+
                 del_node->value->links--;
                 free(del_node->key);
                 free(del_node);
                 tab->del_count--;
                 del_flg++;
             }
+
             if (del_flg && node == tab->nodes[i]) {
                 old_node = NULL;
             } else {
@@ -244,10 +255,12 @@ void hashtab_real_delete(struct hashtab_t *tab)
                     del_inode = inode;
                     inode = tab->inodes[i];
                 }
+
                 free(del_inode->value);
                 free(del_inode);
                 del_flg++;
             }
+
             if (del_flg && inode == tab->inodes[i]) {
                 old_inode = NULL;
             } else {
@@ -258,6 +271,7 @@ void hashtab_real_delete(struct hashtab_t *tab)
     }
 }
 
+/* free hashtable struct and all nodes and inodes */
 void hashtab_free(struct hashtab_t *tab)
 {
     /* free nodes */

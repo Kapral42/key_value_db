@@ -216,7 +216,7 @@ void mydb_close(struct mydb_t *db)
     free(db);
 }
 
-#if 1
+#if 0
 #include <unistd.h>
 #include <sys/types.h>
 #include <limits.h>

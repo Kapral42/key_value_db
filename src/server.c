@@ -3,55 +3,94 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <omp.h>
 
 #include "names.h"
 #include "database.h"
 
-int main(int argc, const char *argv[])
+int create_soket(int thr)
 {
-    struct sockaddr_un sock_addr, from_addr;
-    char buff[100];
-    int sockfd, recv_len;
+    struct sockaddr_un sock_addr;
+    int sockfd;
     socklen_t sockaddr_len = sizeof(sock_addr);
 
-    // TODO: change type of socket tot SOCK_STREAM
     sockfd = socket(PF_UNIX, SOCK_DGRAM, 0);
     if (sockfd < 0) {
         perror("Socket creation failed!\n");
-        return EXIT_FAILURE;
+        return -1;
     }
 
     sock_addr.sun_family = AF_UNIX;
-    strncpy(sock_addr.sun_path, SERVER_SOCKET_FILE, 108);
-    unlink(SERVER_SOCKET_FILE);
+    sprintf(sock_addr.sun_path, "%s%d", SERVER_SOCKET_FILE, thr);
+    unlink(sock_addr.sun_path);
     if (bind(sockfd, (struct sockaddr *) &sock_addr,
                 sizeof(sock_addr)) < 0) {
         perror("Socket binding failed!\n");
         close(sockfd);
-        return EXIT_FAILURE;
+        return -1;
     }
 
-    while ((recv_len = recvfrom(sockfd, buff, 100, 0,
-                    (struct sockaddr *) &from_addr, &sockaddr_len)) > 0) {
-        printf("recvfrom: %s\n", buff);
+    return sockfd;
+}
+
+int main(int argc, const char *argv[])
+{
+    /* Database init */
+    struct mydb_t *db = mydb_init(FILE_DATA, FILE_MDATA, 1);
+    if (!db) {
+        printf("DB not created\n");
+        return 1;
     }
 
-    /*int sockfd1 = accept(sockfd, (struct sockaddr *) &from_addr, &sockaddr_len);
-    while ((recv_len = recv(sockfd1, buff, 100, 0)) > 0) {
-        printf("recvfrom: %s\n", buff);
+
+#pragma omp parallel num_threads(SERVER_NUM_THREADS)
+{
+    int thr = omp_get_thread_num();
+
+    /* Server init */
+    int sockfd, recv_len;
+    if ((sockfd = create_soket(thr)) < 0) {
+        exit(EXIT_FAILURE);
     }
-    printf("recv_len: %d\n", recv_len);
-*/
 
+    int i = 0;
 
-    //test hashtable
-    
-    //now we have the value and key
-    
+    struct sockaddr_un from_addr;
+    socklen_t sockaddr_len = sizeof(struct sockaddr_un);
+    unsigned char c_type, ibuf[20], *arg[2];
+    int arg_len[2];
+
+    for(;;) {
+        recv_len = recvfrom(sockfd, ibuf, 20, 0,
+                    (struct sockaddr *) &from_addr, &sockaddr_len);
+        i++;
+        //printf("%d recvfrom: %s\n", i, buf); fflush(stdout);
+        c_type = (unsigned char) ibuf[0];
+        arg_len[0] = *((int*)&ibuf[1]);
+        arg_len[1] = *((int*)&ibuf[1 + sizeof(int)]);
+        printf("%d] type: %d, len1 %d, len2 %d\n", thr, (int) c_type, arg_len[0], arg_len[1]);
+
+        for (i = 0; i < 2 && arg_len[i] > 0; i++) {
+            arg[i] = malloc(arg_len[i]);
+            recv_len = recvfrom(sockfd, arg[i], arg_len[i], 0,
+                        (struct sockaddr *) &from_addr, &sockaddr_len);
+            printf("%d] arg%d \"%s\"\n", thr, i, arg[i]);
+        }
+
+        fflush(stdout);
+
+        char res = 1;
+        //send(sockfd, &res, 1, 0);
+        sendto(sockfd, &res, 1, 0, (struct sockaddr *)&from_addr, sockaddr_len);
+
+    }
 
     if (sockfd >= 0) {
         close(sockfd);
     }
+}
+
+    mydb_close(db);
 
     return EXIT_SUCCESS;
 }
