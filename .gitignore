@@ -1,6 +1,10 @@
+*.mydb
+*.swp
 other/*
 *server
 *client
 *.out
 *.o
 *test.sh
+*build.sh
+*prog
