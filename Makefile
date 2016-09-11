@@ -1,6 +1,13 @@
+ZLIB=
+DZLIB=
+ifdef zlib
+ZLIB=-lz
+DZLIB=-DZLIB
+endif
+
 CC=gcc
-CFLAGS= -Wall -fopenmp -g
-LDFLAGS= -fopenmp
+CFLAGS= -Wall -fopenmp -g $(DZLIB)
+LDFLAGS= -fopenmp $(ZLIB)
 
 SOURCES_S=src/database.c src/hash.c src/hashtab.c src/server.c src/io.c
 SOURCES_C=src/client.c
