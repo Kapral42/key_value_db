@@ -8,7 +8,7 @@
 
 int client_functs(char c_type, int sockfd)
 {
-    if (c_type == C_PUT || c_type == C_ERACE) {
+    if (c_type == C_PUT || c_type == C_ERACE || c_type == C_EXIT) {
         char res = 0;
         recv(sockfd, &res, 1, 0);
         if (res == 1) {
@@ -89,7 +89,7 @@ void usage()
 {
     printf("Usage: ./client COMMAND [COMMAND ARGS]\n");
     printf("COMMAND:\n\tlist\n\tput <key> <value>");
-    printf("\n\tget <key>\n\terase <key>\n");
+    printf("\n\tget <key>\n\terase <key>\n\texit\n");
 }
 
 int main(int argc, const char *argv[])
@@ -112,6 +112,8 @@ int main(int argc, const char *argv[])
     } else if (!strcmp(argv[1], "erase")) {
         c_type = C_ERACE;
         n_arg = 1;
+    } else if (!strcmp(argv[1], "exit")) {
+        c_type = C_EXIT;
     } else {
         printf("Incorrect command!\n");
         usage();

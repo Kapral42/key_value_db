@@ -63,6 +63,13 @@ void server_functs(struct mydb_t *db, char c_type, char **arg, int sockfd, struc
                 sendto(sockfd, &res, 1, 0, (struct sockaddr *) addr, addr_len);
                 break;
             }
+        case C_EXIT:
+            {
+                mydb_close(db);
+                char res = 1;
+                sendto(sockfd, &res, 1, 0, (struct sockaddr *) addr, addr_len);
+                exit(EXIT_SUCCESS);
+            }
     }
 }
 
@@ -138,10 +145,6 @@ int main(int argc, const char *argv[])
 
         server_functs(db, c_type, arg, sockfd,
                         &from_addr, sockaddr_len);
- //       printf("LIST:\n");
-//        mydb_list(db);
-  //      char res = 1;
-   //     sendto(sockfd, &res, 1, 0, (struct sockaddr *)&from_addr, sockaddr_len);
 
         printf("%d-----------------------\n",thr);
         fflush(stdout);
@@ -152,7 +155,6 @@ int main(int argc, const char *argv[])
     }
 }
 
-    mydb_close(db);
 
     return EXIT_SUCCESS;
 }

@@ -9,6 +9,7 @@
 #define C_PUT   1
 #define C_GET   2
 #define C_ERACE 3
+#define C_EXIT  4
 
 /* DB */
 #define FILE_DATA "./data.mydb"
