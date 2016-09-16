@@ -6,7 +6,7 @@ DZLIB=-DZLIB
 endif
 
 CC=gcc
-CFLAGS= -Wall -fopenmp -g $(DZLIB)
+CFLAGS= -Wall -fopenmp -g -std=c11 $(DZLIB)
 LDFLAGS= -fopenmp $(ZLIB)
 
 SOURCES_S=src/database.c src/hash.c src/hashtab.c src/server.c src/io.c
